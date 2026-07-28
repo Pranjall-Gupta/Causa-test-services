@@ -1,0 +1,2 @@
+2026-07-28T11:55:42.182+05:30  INFO 18932 --- [           main] c.c.t.CausaTestServicesApplication       : Starting CausaTestServicesApplication v0.0.1-SNAPSHOT using Java 24.0.2 with PID 18932 (C:\Users\A\Desktop\Causa-magic\causa-test-services\target\causa-test-services-0.0.1-SNAPSHOT.jar started by A in C:\Users\A\Desktop\Causa-magic\causa-test-services)
+2026-07-28T11:55:42.204+05:30  INFO 18932 --- [           main] c.c.t.CausaTestServicesApplication       : No active profile set, falling back to 1 default profile: "default"

@@ -1,0 +1,7 @@
+"target/
+tools/
+*.class
+.idea/
+*.iml" | Out-File -Encoding utf8 .gitignore
+
+Test-Path .git

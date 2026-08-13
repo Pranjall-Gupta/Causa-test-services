@@ -1,4 +1,3 @@
-@"
 target/
 tools/
 *.class
@@ -7,4 +6,3 @@ tools/
 *.log
 createdFiles.lst
 inputFiles.lst
-"@ | Set-Content -Encoding utf8 .gitignore

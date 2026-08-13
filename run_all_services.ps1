@@ -2,6 +2,8 @@ param(
     [switch]$Stop
 )
 
+$CausaApiKey = "causa_proj_857aa8d8-d1ce-4d6e-ad6a-b903de24b43b"
+
 if ($Stop) {
     Write-Host "Stopping all causa-test-services microservices..."
     Get-Job -Name "checkout-api", "order-service", "payment-service", "inventory-service" -ErrorAction SilentlyContinue | Stop-Job -ErrorAction SilentlyContinue
@@ -44,18 +46,19 @@ foreach ($port in $ports) {
 }
 
 Write-Host "Building causa-test-services project..."
-& "..\causa-backend\tools\apache-maven-3.9.6\bin\mvn.cmd" clean package -DskipTests
+& "$PSScriptRoot\mvnw.cmd" clean package -DskipTests
 
 if ($LASTEXITCODE -ne 0) {
+    Write-Host "`nERROR: Maven build failed with exit code $LASTEXITCODE. Aborting service startup!" -ForegroundColor Red
     Write-Error "Maven build failed!"
     exit $LASTEXITCODE
 }
 
 Write-Host "Starting 4 microservices concurrently in background (PowerShell Jobs)..."
-Start-Job -Name "checkout-api" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8081 --service.name=checkout-api } > $null
-Start-Job -Name "order-service" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8082 --service.name=order-service } > $null
-Start-Job -Name "payment-service" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8083 --service.name=payment-service } > $null
-Start-Job -Name "inventory-service" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8084 --service.name=inventory-service } > $null
+Start-Job -Name "checkout-api" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8081 --causa.service-name=checkout-api --causa.api.key=$using:CausaApiKey } > $null
+Start-Job -Name "order-service" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8082 --causa.service-name=order-service --causa.api.key=$using:CausaApiKey } > $null
+Start-Job -Name "payment-service" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8083 --causa.service-name=payment-service --causa.api.key=$using:CausaApiKey } > $null
+Start-Job -Name "inventory-service" -ScriptBlock { cd $using:PSScriptRoot; java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8084 --causa.service-name=inventory-service --causa.api.key=$using:CausaApiKey } > $null
 
 Write-Host "`nAll 4 services successfully started!"
 Write-Host "  - checkout-api    : http://localhost:8081"

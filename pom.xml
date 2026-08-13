@@ -42,6 +42,12 @@
             <artifactId>opentelemetry-exporter-otlp</artifactId>
             <version>${opentelemetry.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>com.causa</groupId>
+            <artifactId>causa-plugin-java</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
     <build>

@@ -42,7 +42,21 @@
             <artifactId>opentelemetry-exporter-otlp</artifactId>
             <version>${opentelemetry.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>com.causa</groupId>
+            <artifactId>causa-plugin-java</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
+
+    <repositories>
+        <repository>
+            <id>github</id>
+            <name>Causa Plugin Java GitHub Packages</name>
+            <url>https://maven.pkg.github.com/soham-kolhe/Causa-plugin-java</url>
+        </repository>
+    </repositories>
 
     <build>
         <plugins>

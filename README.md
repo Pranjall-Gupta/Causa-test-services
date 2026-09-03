@@ -1,84 +1,129 @@
-# CAUSA Test Services (Phase 3)
+# CAUSA Test Services
 
-Real, instrumented microservices used to generate live trace/log/metric data for testing `Causa-backend` end-to-end — as opposed to the frontend's built-in mock data layer. Four services (`checkout-api`, `order-service`, `payment-service`, `inventory-service`) are simulated by launching the **same Spring Boot jar four times** with different `--server.port` and `--service.name` flags, each manually instrumented with OpenTelemetry and **W3C trace context propagation** so calls between them produce real, correlated distributed traces.
-
----
-
-## Project Repositories
-
-| Repo | What it is |
-|---|---|
-| **Causa-test-services** (this repo) | Real instrumented microservices generating live telemetry for testing |
-| [Causa](https://github.com/Pranjall-Gupta/Causa) | React frontend — dashboards, topology graph, RCA views |
-| [Causa-backend](https://github.com/Pranjall-Gupta/Causa-backend) | Spring Boot backend — OTLP ingestion, dynamic topology, anomaly detection, heuristic RCA scoring |
-| [Causa-plugin-java](https://github.com/soham-kolhe/Causa-plugin-java) | Java plugin developers add to their own services to emit data to CAUSA |
-
-> **Repo layout requirement**: `Causa-test-services` and `Causa-backend` must be cloned as sibling folders (`.../causa-backend/`, `.../causa-test-services/`) — the build script (`run_all_services.ps1`) invokes Maven from `causa-backend`'s `tools/` directory rather than bundling its own.
+`causa-test-services` is a Spring Boot application designed to simulate a distributed microservices environment. It generates realistic OpenTelemetry (OTel) traces, metrics, and logs to test and validate the Root Cause Analysis (RCA) pipeline, anomaly detection, and topology visualization of the **CAUSA backend**.
 
 ---
 
-## How It Works
+## 1. Simulated Microservices & Call Chain
 
-### Codebase Map
-- `src/main/java/com/causa/testservices/`
-  - `CausaTestServicesApplication` — Spring Boot entry point; the same jar boots as any of the 4 services depending on the `--service.name` flag it's launched with
-  - `controller/ServiceController.java` — the request-handling logic simulating each service's behavior, including the chaos toggle endpoints (`/chaos/enable`, `/chaos/disable`)
-  - `otel/OTelConfig.java` — configures the OpenTelemetry SDK/exporter
-  - `otel/OTelTraceFilter.java` — intercepts *incoming* requests to extract/continue the trace context
-  - `otel/OTelRestTemplateInterceptor.java` — intercepts *outgoing* calls between services to propagate the W3C trace context downstream, so a single request across all 4 services shares one `traceId`
+The application can be launched as four separate microservice instances by specifying `--server.port` and `--service.name` at startup:
 
-### Ports
-| Service | Port |
-|---|---|
-| checkout-api | 8081 |
-| order-service | 8082 |
-| payment-service | 8083 |
-| inventory-service | 8084 |
+1. **`checkout-api`** (Port `8081`): The public entry point for client checkout transactions. Calls `order-service` at `http://localhost:8082/order`.
+2. **`order-service`** (Port `8082`): Handles order creation by making downstream calls to `payment-service` (`http://localhost:8083/payment`) and `inventory-service` (`http://localhost:8084/inventory`).
+3. **`payment-service`** (Port `8083`): Processes payment transactions. Serves as the target for chaos injection (latency delays and 500 errors).
+4. **`inventory-service`** (Port `8084`): Manages stock verification and returns availability status.
 
-Telemetry is sent to `causa-backend`, expected on **port 5000**.
-
----
-
-## Running the Harness
-
-Build + start all 4 services in the background:
-```powershell
-.\run_all_services.ps1
+### End-to-End Call Chain
 ```
-This auto-cleans any existing jobs/port bindings first, rebuilds via Maven, then launches all 4 as PowerShell background jobs.
-
-Stop everything (kills the jobs and force-frees ports 8081–8084 as a fallback):
-```powershell
-.\run_all_services.ps1 -Stop
-```
-
-Alternative: **keep-alive harness** — same 4 services, but stays in the foreground monitoring job health and printing logs if any service crashes (Ctrl+C to stop and clean up):
-```powershell
-.\run_harness.ps1
+[ Client Request ]
+       │
+       ▼
+ [ checkout-api ] (8081)
+       │
+       ▼
+ [ order-service ] (8082)
+       ├───► [ payment-service ] (8083)  ◄── (Chaos Injection Target)
+       └───► [ inventory-service ] (8084)
 ```
 
 ---
 
-## Chaos Demo
+## 2. Telemetry Instrumentation & Backend Ingestion
 
-`trigger_chaos_demo.ps1` demonstrates the full failure-detection pipeline live:
+Distributed tracing and context propagation across services are implemented using OpenTelemetry in the following components:
 
-1. Enables chaos mode on `payment-service` (`POST http://localhost:8083/chaos/enable`)
-2. Sends 5 requests to `checkout-api` (`http://localhost:8081`), which calls downstream through `order-service` → `payment-service`, cascading the induced failure upstream
-3. Prints commands to check the results directly against the backend:
+- **`OTelTraceFilter.java`**: A servlet filter that extracts W3C `traceparent` headers from incoming HTTP requests, initializes server spans (`SPAN_KIND_SERVER`), tracks status codes (marking `5xx` responses with `StatusCode.ERROR`), and records exceptions.
+- **`OTelRestTemplateInterceptor.java`**: A `RestTemplate` interceptor that creates client spans (`SPAN_KIND_CLIENT`) for outgoing inter-service requests and injects the active W3C trace context into HTTP headers to preserve context propagation across service boundaries.
+- **`OTelConfig.java`**: Configures the OpenTelemetry SDK with a custom `CustomJsonSpanExporter` that serializes span data into JSON format compatible with the CAUSA backend and transmits it asynchronously via HTTP.
+
+### Backend Endpoints
+Telemetry data generated by these services is sent to the following CAUSA backend endpoints (`http://localhost:5000`):
+
+- **`/v1/traces`**: Ingests OpenTelemetry trace spans.
+- **`/v1/metrics`**: Ingests service CPU, memory, and operational metrics.
+- **`/v1/logs`**: Ingests application logs and error messages.
+
+---
+
+## 3. How to Build & Run
+
+### Prerequisites
+- Java 21 SDK
+- Maven (or the bundled wrapper/binary)
+
+### Building the Package
+Compile and package the project into a single JAR file:
+```powershell
+mvn clean package -DskipTests
+```
+
+### Running via Scripts (Recommended)
+The repository includes PowerShell scripts for automated management:
+
+- **Start All Services**:
+  ```powershell
+  .\run_all_services.ps1
+  ```
+  Launches all 4 microservices concurrently in background PowerShell jobs on ports `8081`, `8082`, `8083`, and `8084`.
+
+- **Stop All Services**:
+  ```powershell
+  .\run_all_services.ps1 -Stop
+  ```
+  Stops background jobs and frees bound network ports (`8081`-`8084`).
+
+- **Run Harness Loop**:
+  ```powershell
+  .\run_harness.ps1
+  ```
+  Starts background service jobs and monitors their health in a keep-alive loop.
+
+### Manual Service Execution
+To run a specific service manually:
+```powershell
+java -jar .\target\causa-test-services-0.0.1-SNAPSHOT.jar --server.port=8081 --service.name=checkout-api
+```
+
+---
+
+## 4. Chaos Injection & RCA Testing Scenario
+
+`payment-service` supports runtime chaos injection to simulate microservice failures and test CAUSA's automated anomaly detection and RCA pipeline.
+
+### Chaos Control Endpoints
+Chaos toggles are exposed via HTTP POST endpoints on `payment-service` (port `8083`):
+
+- **Enable Chaos**: `POST http://localhost:8083/chaos/enable`
+  - Injects random latency (between 1.8s and 2.8s delay).
+  - Injects HTTP `500 Internal Server Error` responses with the body `"Chaos Error: Payment Gateway Timeout (504)"`.
+- **Disable Chaos**: `POST http://localhost:8083/chaos/disable`
+  - Restores normal operational status to `payment-service`.
+
+### Triggering an RCA Test Scenario
+
+1. **Enable Chaos**:
    ```powershell
-   Invoke-RestMethod http://localhost:5000/v1/alerts
-   Invoke-RestMethod http://localhost:5000/v1/graph
+   Invoke-RestMethod -Uri "http://localhost:8083/chaos/enable" -Method Post
    ```
-4. Disable chaos afterward:
+
+2. **Generate Traffic**:
+   Send HTTP GET requests to `checkout-api` (`http://localhost:8081`):
    ```powershell
-   Invoke-RestMethod -Uri http://localhost:8083/chaos/disable -Method Post
+   Invoke-RestMethod -Uri "http://localhost:8081" -Method Get
+   ```
+   Or run the included demo script:
+   ```powershell
+   .\trigger_chaos_demo.ps1
    ```
 
-Run this after `run_all_services.ps1` (or `run_harness.ps1`) and `Causa-backend` are both up, to generate a real critical alert and RCA trajectory instead of relying on the frontend's mock data.
+3. **Observe RCA Propagation**:
+   - The failure in `payment-service` propagates upstream to `order-service` and `checkout-api`, returning 500 errors and high latency.
+   - OTel trace spans with `StatusCode.ERROR` and updated metrics are automatically exported to the backend (`http://localhost:5000/v1/traces`).
+   - Query the backend endpoints to verify anomaly alerts and root cause graph identification:
+     - Active Alerts: `GET http://localhost:5000/v1/alerts`
+     - Topology Graph: `GET http://localhost:5000/v1/graph`
 
----
-
-## Prerequisites
-- Java + Maven (via `causa-backend`'s bundled Maven, see repo layout note above)
-- `Causa-backend` running on port 5000
+4. **Disable Chaos**:
+   ```powershell
+   Invoke-RestMethod -Uri "http://localhost:8083/chaos/disable" -Method Post
+   ```

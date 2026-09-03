@@ -1,7 +1,0 @@
-com\causa\testservices\CausaTestServicesApplication.class
-com\causa\testservices\otel\OTelTraceFilter$1.class
-com\causa\testservices\otel\OTelTraceFilter.class
-com\causa\testservices\otel\OTelConfig$CustomJsonSpanExporter.class
-com\causa\testservices\controller\ServiceController.class
-com\causa\testservices\otel\OTelConfig.class
-com\causa\testservices\otel\OTelRestTemplateInterceptor.class
